@@ -21,6 +21,7 @@ interface PilotData {
 }
 
 interface Pilot {
+  droneSN: string;
   pilotData: PilotData;
   distance: number;
   persistUntil: number;
@@ -42,7 +43,7 @@ function getResource(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
     https.get(url, (response) => {
       let resource = '';
-      if (response.statusCode! < 200 || response.statusCode! > 299) reject(response.statusCode);
+      if (response.statusCode! < 200 || response.statusCode! > 299) reject(response.headers);
       response.on('data', (chunks: string) => {
         resource += chunks;
       });
@@ -67,18 +68,17 @@ export async function getPilots(pilotsList: PilotList) {
       .parse(await getResource('https://assignments.reaktor.com/birdnest/drones'))
       .report.capture.drone.filter((drone: Drone) => droneDistanceFromOrigin(drone) < 100000);
     try {
-      const pilots = drones
-        .filter((drone) => {
+      const newDrones = drones.filter((drone) => !(drone.serialNumber in pilotsList));
+      drones //update data of pilots whose drones are already in the list
+        .filter((drone) => drone.serialNumber in pilotsList)
+        .forEach((drone) => {
           const distance = droneDistanceFromOrigin(drone);
-          //only get pilots, whose information we don't already have
-          if (drone.serialNumber in pilotsList) {
-            pilotsList[drone.serialNumber].persistUntil = persist;
-            pilotsList[drone.serialNumber].distance =
-              distance > pilotsList[drone.serialNumber].distance ? pilotsList[drone.serialNumber].distance : distance;
-          }
-          return drone;
-        })
-        .map(async (drone) => {
+          pilotsList[drone.serialNumber].persistUntil = persist;
+          pilotsList[drone.serialNumber].distance =
+            distance > pilotsList[drone.serialNumber].distance ? pilotsList[drone.serialNumber].distance : distance;
+        });
+      if (newDrones.length > 0) {
+        const pilots = newDrones.map(async (drone) => {
           return {
             droneSN: drone.serialNumber,
             pilotData: JSON.parse(
@@ -88,24 +88,30 @@ export async function getPilots(pilotsList: PilotList) {
             persistUntil: persist,
           };
         });
-      await Promise.all(pilots)
-        .then((resolvedPilots) =>
-          resolvedPilots.forEach((pilot) => {
-            if (pilotsList[pilot.droneSN]) {
-              pilot.distance =
-                pilotsList[pilot.droneSN].distance > pilot.distance
-                  ? pilot.distance
-                  : pilotsList[pilot.droneSN].distance;
-            }
-            pilotsList[pilot.droneSN] = pilot;
-          })
-        )
-        .catch((error) => console.log(error));
-      return pilotsList;
+        await Promise.all(pilots)
+          .then((resolvedPilots) =>
+            resolvedPilots.forEach((pilot) => {
+              if (pilotsList[pilot.droneSN]) {
+                pilot.distance =
+                  pilotsList[pilot.droneSN].distance > pilot.distance
+                    ? pilot.distance
+                    : pilotsList[pilot.droneSN].distance;
+              }
+              pilotsList[pilot.droneSN] = pilot;
+            })
+          )
+          .catch((error) => {
+            console.log('Promise: ' + new Date(Date.now()).toUTCString());
+            console.log(error);
+          });
+        return pilotsList;
+      }
     } catch (err2) {
+      console.log('Pilots: ' + new Date(Date.now()).toUTCString());
       console.log(err2);
     }
   } catch (err1) {
+    console.log('Drones: ' + new Date(Date.now()).toUTCString());
     console.log(err1);
   }
 }
