@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import { PilotList, getPilots, checkPilotPersistence } from './pilots';
 import cors from 'cors';
 dotenv.config();
+const port = process.env.PORT;
 
 let pilotsList: PilotList = {};
 
@@ -19,6 +20,6 @@ app.get('/getData', (req: Request, res: Response) => {
   res.send(pilotsList);
 });
 
-app.listen(() => {
+app.listen(port, () => {
   console.log(`[server]: Server is running.`);
 });
