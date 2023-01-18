@@ -18,3 +18,7 @@ app.use(cors());
 app.get('/getData', (req: Request, res: Response) => {
   res.send(pilotsList);
 });
+
+app.listen(() => {
+  console.log(`[server]: Server is running.`);
+});
